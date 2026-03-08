@@ -1,4 +1,4 @@
-use packs_logging::ConfigLevelFilter;
+use logging::ConfigLevelFilter;
 use serde::Deserialize;
 use serde_json::{Result, from_str};
 

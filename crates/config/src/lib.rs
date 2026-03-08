@@ -1,6 +1,6 @@
 use std::io::{BufReader, Read};
 
-use packs_logging::ConfigLevelFilter;
+use logging::ConfigLevelFilter;
 use serde::Deserialize;
 
 #[derive(Debug, Default, Deserialize)]

@@ -8,7 +8,7 @@ use clap::{
 	ValueEnum,
 	builder::{OsStr, PossibleValue},
 };
-use packs_logging::{ConfigLevelFilter, DEFAULT as CONFIGLEVELFILTER_DEFAULT};
+use logging::{ConfigLevelFilter, DEFAULT as CONFIGLEVELFILTER_DEFAULT};
 
 /// ArgLevelFilter is a newtype for ConfigLevelFilter, so that `clap`'s
 /// ValueEnum can be implemented.  Implementations are largely shallow wrappers

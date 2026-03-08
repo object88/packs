@@ -1,5 +1,5 @@
 [package]
-name = "packs_logging"
+name = "logging"
 edition.workspace = true
 version.workspace = true
 

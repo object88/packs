@@ -6,7 +6,7 @@ version.workspace = true
 [lib]
 
 [dependencies]
-packs_logging = { path = "../packs_logging" }
+logging = { path = "../logging" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
 tracing.workspace = true
