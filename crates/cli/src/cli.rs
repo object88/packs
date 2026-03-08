@@ -13,6 +13,7 @@ use clap::{
 	parser::ValueSource,
 };
 use config::Config;
+use packs::devices::list;
 use thiserror::Error;
 use tracing::{trace, trace_span};
 
@@ -99,7 +100,7 @@ impl Cli {
 		Cli { root }
 	}
 
-	pub fn parse(self) {
+	pub fn parse(self) -> Result<()> {
 		let matches = self.root.get_matches();
 
 		// Configure logging first; let's figure out how to report back to the world.
@@ -112,9 +113,9 @@ impl Cli {
 		let _cfg = Cli::load_config(&matches);
 
 		match matches.subcommand() {
-			Some((CMD_LIST_DEVICES, _sub)) => {},
-			Some((CMD_VERSION, _sub)) => {},
-			_ => {},
+			Some((CMD_LIST_DEVICES, _sub)) => list(),
+			Some((CMD_VERSION, _sub)) => Ok(()),
+			_ => Ok(()),
 		}
 	}
 

@@ -1,0 +1,11 @@
+[package]
+name = "packs"
+edition.workspace = true
+version.workspace = true
+
+[lib]
+
+[dependencies]
+anyhow.workspace = true
+pcap = { version = "2.4.0" }
+tracing.workspace = true

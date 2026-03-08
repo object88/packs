@@ -18,6 +18,7 @@ clap = { version = "4.5.60", features = ["color", "env", "error-context", "std",
 config = { path = "../config" }
 dirs = { version = "6.0.0" }
 logging = { path = "../logging" }
+packs = { path = "../packs" }
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3.22" }
