@@ -1,0 +1,13 @@
+[package]
+name = "sync"
+edition.workspace = true
+version.workspace = true
+
+[features]
+hotpath = ["hotpath/hotpath"]
+
+[lib]
+
+[dependencies]
+hotpath = { version = "0.9.3", features = ["hotpath", "tokio"] }
+tokio.workspace = true

@@ -1,0 +1,106 @@
+use std::marker::PhantomData;
+
+use anyhow::Result;
+use tokio::sync::{mpsc, oneshot};
+
+pub mod runnable;
+
+pub struct Initial {}
+pub struct Running {}
+pub struct Complete {}
+
+enum LifecycleState {
+	Initial,
+	Running,
+	Complete,
+}
+
+// Type-state messages
+enum Message {
+	Start { tx: mpsc::Sender<Response> },
+	Stop,
+}
+
+enum Response {}
+
+// Type-state handles
+pub struct Handle<S> {
+	sender: mpsc::Sender<Message>,
+	_marker: PhantomData<S>,
+}
+
+impl Handle<Initial> {
+	pub fn new() -> Self {
+		let (tx, rx) = mpsc::channel(1);
+		let actor = LifecycleActor::new(rx);
+		tokio::spawn(actor.run());
+		Handle<Initial> { sender: tx }
+	}
+
+	pub async fn start(self) -> Result<Handle<Running>, ()> {
+		let (tx, rx) = oneshot::channel();
+		self
+			.sender
+			.send(Message::Start { tx })
+			.await
+			.map_err(|_| ())?;
+		let sender = rx.await.map_err(|_| ())?;
+		Ok(Handle<Running> { sender })
+	}
+}
+
+impl RunningHandle {
+	pub async fn stop(self) -> Result<CompleteHandle, ()> {
+		let (tx, rx) = oneshot::channel();
+		self.sender.send(Message::Stop).await.map_err(|_| ())?;
+		let sender = rx.await.map_err(|_| ())?;
+		Ok(CompleteHandle { sender })
+	}
+}
+
+// Actor
+struct LifecycleActor {
+	rx: mpsc::Receiver<Message>,
+	state: LifecycleState,
+}
+
+impl LifecycleActor {
+	fn new(rx: mpsc::Receiver<Message>) -> Self {
+		LifecycleActor {
+			rx,
+			state: LifecycleState::Initial,
+		}
+	}
+
+	async fn run(mut self) {
+		while let Some(msg) = self.rx.recv().await {
+			match (self.state, msg) {
+				(LifecycleState::Initial, Message::Start) => {
+					let worker = worker.start();
+					let (tx, rx) = mpsc::channel(32);
+					let _ = response.send(tx);
+					self.state = LifecycleState::Running;
+					self.handle_run(rx).await;
+					return;
+				},
+				(LifecycleState::Running, _) => !unreachable!(),
+				(LifecycleState::Complete, _) => !unreachable!(),
+				(LifecycleState::Initial, _) => !unreachable!(),
+				(LifecycleState::Running, Message::Stop) => {
+					let worker = worker.stop();
+					let (tx, rx) = mpsc::channel(32);
+					let _ = response.send(tx);
+					self.state = LifecycleState::Complete;
+					self.handle_complete(rx).await;
+					return;
+				},
+				(LifecycleState::Complete, _) => !unreachable!(),
+				(LifecycleState::Initial, _) => !unreachable!(),
+				(LifecycleState::Running, _) => !unreachable!(),
+				(LifecycleState::Complete, _) => {
+					self.state = LifecycleState::Complete;
+				},
+			}
+		}
+	}
+}

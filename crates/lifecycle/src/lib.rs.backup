@@ -1,0 +1,144 @@
+//! An application component lifecycle manager
+//!
+//! The primary instantiation is via a `builder`.
+//!
+//! The builder allows the collection of Runnables.
+//!
+//! The builder allows setting a value for time-to-start and time-to-stop.
+//!
+//! The builder `build` method returns a handle to the lifecycle actor.
+//!
+//! The handle is a state machine:
+//! * initial -> starting
+//! * starting -> running
+//! * running -> stopping
+//! * stopping
+//!
+//! Once the application is ready to start, the `start` method is called on the
+//! handle.  When `start` is called, the collected Runnables are started via
+//! their `run` method.  The `start` method will return when all Runnables have
+//! started, and will return an error if any of them failed to start.
+//!
+//! When the application needs to shut down, the `stop` method is called on the
+//! handle.  Each Runnable has a period to organically stop before the JoinHandle
+//! is aborted.
+//!
+//! ```
+//!
+//! ```
+
+use std::marker::PhantomData;
+
+use tokio::sync::{mpsc, oneshot};
+use tracing::{debug, info};
+
+use crate::runnable::Runnable;
+
+pub mod runnable;
+
+enum Message {
+	Start { respond_to: oneshot::Sender<()> },
+}
+
+pub struct Unset {}
+
+// builder type-state markers
+pub trait Int32Marker {}
+impl Int32Marker for Unset {}
+impl Int32Marker for i32 {}
+
+// handle type-state markers
+struct Initial;
+struct Starting;
+struct Running;
+struct Stopping;
+
+struct Lifecycle<S> {
+	runnables: Vec<Box<dyn Runnable>>,
+	receiver: mpsc::Receiver<Message>,
+	_state: PhantomData<S>,
+}
+
+pub struct Handle {
+	sender: mpsc::Sender<Message>,
+}
+
+pub struct Builder<IM>
+where
+	IM: Int32Marker,
+{
+	runnables: Vec<Box<dyn Runnable>>,
+	x: IM,
+}
+
+impl Builder<i32> {
+	pub fn build(self) -> Handle {
+		Handle::new(self.runnables)
+	}
+}
+
+pub fn builder() -> Builder<Unset> {
+	Builder {
+		runnables: vec![],
+		x: Unset {},
+	}
+}
+
+impl<IM> Builder<IM>
+where
+	IM: Int32Marker,
+{
+	pub fn with_int32(self, x: i32) -> Builder<i32> {
+		Builder {
+			runnables: self.runnables,
+			x,
+		}
+	}
+
+	pub fn with_runnable(mut self, r: Box<dyn Runnable>) -> Builder<IM> {
+		self.runnables.push(r);
+		self
+	}
+}
+
+impl Handle {
+	fn new(runnables: Vec<Box<dyn Runnable>>) -> Self {
+		let (sender, receiver) = sync::mpsc(16, "lifecycle actor");
+		let mut actor = Lifecycle::new(runnables, receiver);
+		tokio::spawn(async move { actor.run().await });
+		Handle { sender }
+	}
+
+	pub async fn start(&self) {
+		let (sender, receiver) = sync::oneshot("start");
+		let m = Message::Start { respond_to: sender };
+		let _ = self.sender.send(m).await;
+		receiver.await.expect("failed")
+	}
+}
+
+impl Lifecycle {
+	fn new(runnables: Vec<Box<dyn Runnable>>, receiver: mpsc::Receiver<Message>) -> Self {
+		Lifecycle {
+			runnables,
+			receiver,
+		}
+	}
+
+	async fn run(&mut self) {
+		debug!("entered lifecycle::run");
+		let (cancel_tx, _) = tokio::sync::broadcast::channel(16);
+		while let Some(msg) = self.receiver.recv().await {
+			match msg {
+				Message::Start { respond_to } => {
+					for r in self.runnables.iter_mut() {
+						r.run(cancel_tx.subscribe()).await;
+					}
+
+					let _ = respond_to.send(());
+				},
+			}
+		}
+		debug!("exiting lifecycle::run");
+	}
+}

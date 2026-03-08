@@ -1,0 +1,11 @@
+[package]
+name = "packs_logging"
+edition.workspace = true
+version.workspace = true
+
+[lib]
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149" }
+tracing.workspace = true

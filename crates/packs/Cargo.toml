@@ -1,0 +1,26 @@
+[package]
+name = "packs"
+edition.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "packs"
+path = "src/bin/main.rs"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
+
+[dependencies]
+anyhow.workspace = true
+clap = { version = "4.5.60", features = ["color", "env", "error-context", "std", "string"], default-features = false }
+config = { path = "../config" }
+dirs = { version = "6.0.0" }
+packs_logging = { path = "../packs_logging" }
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3.22" }
+
+[build-dependencies]
+built = { version = "0.8.0" }

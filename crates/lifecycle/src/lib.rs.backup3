@@ -1,0 +1,149 @@
+use std::marker::PhantomData;
+
+use tokio::{
+	sync::{broadcast, mpsc, oneshot},
+	task::JoinHandle,
+};
+
+pub mod runnable;
+
+pub struct Initial;
+pub struct Running;
+pub struct Complete;
+
+pub enum State {
+	Initial(Initial),
+	Running(Running),
+	Complete(Complete),
+}
+
+enum Request {
+	Start {
+		resp: oneshot::Sender<Response>,
+		runnables: Vec<Box<dyn runnable::Runnable>>,
+	},
+	Stop {
+		resp: oneshot::Sender<Response>,
+	},
+}
+
+struct Response {}
+
+pub struct Builder {
+	stop_notification: Option<oneshot::Sender<()>>,
+}
+
+pub struct Handler<S> {
+	tx: mpsc::Sender<Request>,
+	_marker: PhantomData<S>,
+}
+
+impl Builder {
+	pub fn with_stop_notification(mut self, notification: oneshot::Sender<()>) -> Self {
+		self.stop_notification = Some(notification);
+		self
+	}
+
+	pub fn build(self) -> Handler<Initial> {
+		let (tx, rx) = mpsc::channel(32);
+		tokio::spawn({
+			let actor = Lifecycle {
+				state: State::Initial(Initial {}),
+				rx,
+				stop_notification: self.stop_notification,
+			};
+			actor.run()
+		});
+		Handler::<Initial> {
+			tx,
+			_marker: PhantomData,
+		}
+	}
+}
+
+impl Handler<Initial> {
+	pub fn new() -> Builder {
+		Builder {
+			stop_notification: None,
+		}
+	}
+
+	pub async fn start(self, runnables: Vec<Box<dyn runnable::Runnable>>) -> Handler<Running> {
+		let (resp_tx, resp_rx) = oneshot::channel();
+		let _ = self
+			.tx
+			.send(Request::Start {
+				resp: resp_tx,
+				runnables,
+			})
+			.await;
+
+		let _resp = resp_rx.await;
+
+		Handler::<Running> {
+			tx: self.tx,
+			_marker: PhantomData,
+		}
+	}
+}
+
+impl Handler<Running> {
+	pub async fn add_runnable(self, runnable: Box<dyn runnable::Runnable>) {}
+
+	pub async fn stop(self) -> Handler<Complete> {
+		let (resp_tx, resp_rx) = oneshot::channel();
+		let _ = self.tx.send(Request::Stop { resp: resp_tx }).await;
+
+		let _resp = resp_rx.await;
+
+		Handler::<Complete> {
+			tx: self.tx,
+			_marker: PhantomData,
+		}
+	}
+}
+
+struct Lifecycle {
+	state: State,
+	rx: mpsc::Receiver<Request>,
+
+	stop_notification: Option<oneshot::Sender<()>>,
+}
+
+impl Lifecycle {
+	async fn run(mut self) {
+		let (cancel_tx, _) = broadcast::channel(1);
+		let mut futs: Vec<JoinHandle<()>> = Vec::new();
+
+		while let Some(req) = self.rx.recv().await {
+			match (&self.state, req) {
+				(State::Initial(_), Request::Start { resp, runnables }) => {
+					futs = runnables.into_iter().fold(futs, |mut acc, r| {
+						acc.push(tokio::spawn(r.run(cancel_tx.subscribe())));
+						acc
+					});
+					let _ = resp.send(Response {});
+				},
+				(State::Running(_), Request::Stop { resp }) => {
+					let _ = resp.send(Response {});
+				},
+				(_, _) => {
+					// Illegal state
+				},
+			}
+		}
+		// If we have gotten here, it's because `self.rx.recv` returned None.  This
+		// happens when the handle drops its tx.
+		//
+		// Wait for all runners to stop
+		futures::future::join_all(futs).await;
+	}
+}
+
+impl Drop for Lifecycle {
+	fn drop(&mut self) {
+		if let Some(tx) = self.stop_notification.take() {
+			let _ = tx.send(());
+		}
+	}
+}
