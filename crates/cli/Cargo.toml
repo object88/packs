@@ -21,7 +21,7 @@ logging = { path = "../logging" }
 packs = { path = "../packs" }
 thiserror.workspace = true
 tracing.workspace = true
-tracing-subscriber = { version = "0.3.22" }
+tracing-subscriber = { version = "0.3.23" }
 
 [build-dependencies]
 built = { version = "0.8.0" }
