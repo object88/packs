@@ -9,5 +9,5 @@ hotpath = ["hotpath/hotpath"]
 [lib]
 
 [dependencies]
-hotpath = { version = "0.9.3", features = ["hotpath", "tokio"] }
+hotpath = { version = "0.15.1", features = ["hotpath", "tokio"] }
 tokio.workspace = true
